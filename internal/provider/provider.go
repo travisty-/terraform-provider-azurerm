@@ -144,6 +144,8 @@ func azureProvider(supportLegacyTestSuite bool, testName string) *schema.Provide
 		}
 	}
 
+	addDefaultTagsSupport(resources)
+
 	p := &schema.Provider{
 		Schema: map[string]*schema.Schema{
 			"subscription_id": {

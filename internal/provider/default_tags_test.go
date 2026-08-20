@@ -518,3 +518,78 @@ func TestDefaultTags_forceNewPlanScenarios(t *testing.T) {
 		}
 	})
 }
+
+func TestDefaultTags_realResources(t *testing.T) {
+	defaults := map[string]string{"environment": "prod"}
+	p := TestAzureProvider()
+	p.SetMeta(&clients.Client{DefaultTags: defaults})
+
+	t.Run("azurerm_resource_group applies defaults on create", func(t *testing.T) {
+		r := p.ResourcesMap["azurerm_resource_group"]
+		ty := r.CoreConfigSchema().ImpliedType()
+		config := testObjectWithOverrides(ty, map[string]cty.Value{
+			"name":     cty.StringVal("example"),
+			"location": cty.StringVal("westeurope"),
+			"tags":     cty.NullVal(cty.Map(cty.String)),
+		})
+		proposed := testObjectWithOverrides(ty, map[string]cty.Value{
+			"name":     cty.StringVal("example"),
+			"location": cty.StringVal("westeurope"),
+			"tags":     cty.UnknownVal(cty.Map(cty.String)),
+		})
+		resp := planDefaultTagsResourceChange(t, p, "azurerm_resource_group", cty.NullVal(ty), proposed, config)
+		result := decodeDynamicValue(t, resp.PlannedState, ty).GetAttr("tags")
+		if !result.RawEquals(cty.MapVal(map[string]cty.Value{"environment": cty.StringVal("prod")})) {
+			t.Fatalf("unexpected planned tags: %#v", result)
+		}
+	})
+
+	t.Run("a ForceNew tags resource plans replacement on default change", func(t *testing.T) {
+		r := p.ResourcesMap["azurerm_automation_runtime_environment"]
+		ty := r.CoreConfigSchema().ImpliedType()
+		state := testObjectWithOverrides(ty, map[string]cty.Value{
+			"id":   cty.StringVal("test-id"),
+			"tags": cty.MapValEmpty(cty.String),
+		})
+		config := testObjectWithOverrides(ty, map[string]cty.Value{
+			"tags": cty.NullVal(cty.Map(cty.String)),
+		})
+		proposed := testObjectWithOverrides(ty, map[string]cty.Value{
+			"id":   cty.StringVal("test-id"),
+			"tags": cty.MapValEmpty(cty.String),
+		})
+		resp := planDefaultTagsResourceChange(t, p, "azurerm_automation_runtime_environment", state, proposed, config)
+		tagsPath := tftypes.NewAttributePath().WithAttributeName("tags")
+		found := false
+		for _, path := range resp.RequiresReplace {
+			if path.Equal(tagsPath) {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("expected tags in RequiresReplace, got: %+v", resp.RequiresReplace)
+		}
+	})
+
+	t.Run("azurerm_static_web_app (typed resource) applies defaults on create", func(t *testing.T) {
+		r := p.ResourcesMap["azurerm_static_web_app"]
+		ty := r.CoreConfigSchema().ImpliedType()
+		config := testObjectWithOverrides(ty, map[string]cty.Value{
+			"name":                cty.StringVal("example"),
+			"resource_group_name": cty.StringVal("example-resources"),
+			"location":            cty.StringVal("westeurope"),
+			"tags":                cty.NullVal(cty.Map(cty.String)),
+		})
+		proposed := testObjectWithOverrides(ty, map[string]cty.Value{
+			"name":                cty.StringVal("example"),
+			"resource_group_name": cty.StringVal("example-resources"),
+			"location":            cty.StringVal("westeurope"),
+			"tags":                cty.UnknownVal(cty.Map(cty.String)),
+		})
+		resp := planDefaultTagsResourceChange(t, p, "azurerm_static_web_app", cty.NullVal(ty), proposed, config)
+		result := decodeDynamicValue(t, resp.PlannedState, ty).GetAttr("tags")
+		if !result.RawEquals(cty.MapVal(map[string]cty.Value{"environment": cty.StringVal("prod")})) {
+			t.Fatalf("unexpected planned tags: %#v", result)
+		}
+	})
+}
