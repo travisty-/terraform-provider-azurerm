@@ -224,6 +224,8 @@ The `default_tags` block supports the following:
 
 -> **Note:** On create, if no `default_tags` are configured and the resource's `tags` argument is omitted or set to an empty map, the plan shows `tags` as `(known after apply)`; the applied value is an empty map. This does not occur on update, or when `default_tags` is configured.
 
+-> **Note:** Adding `tags` to a resource's `ignore_changes` keeps that resource's own `tags` value frozen, but changes to the provider's `default_tags` still apply to it.
+
 ~> **Note:** A small number of resources cannot update tags in-place. Changing `default_tags` will force those resources to be recreated.
 
 ## Resource Provider Registrations
