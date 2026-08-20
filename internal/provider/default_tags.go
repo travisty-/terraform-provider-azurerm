@@ -156,9 +156,36 @@ func defaultTagsCustomizeDiff(ctx context.Context, d *pluginsdk.ResourceDiff, me
 		}
 	}
 
-	if plannedIsKnown && reflect.DeepEqual(d.Get("tags"), merged) {
-		return nil
+	// A Computed TypeMap with no prior state entry is marked computed by the SDK's diff
+	// engine whenever both the old and new lengths are zero, regardless of what SetNew
+	// requests. Comparing against the prior state directly, rather than the already-diffed
+	// planned value, and clearing the diff on a match avoids leaving that spurious entry in
+	// place, which would otherwise surface as a no-op resource update or, on a ForceNew
+	// `tags` schema, a spurious forced replacement.
+	if plannedIsKnown && reflect.DeepEqual(rawStateTags(d), merged) {
+		return d.Clear("tags")
 	}
 
 	return d.SetNew("tags", merged)
+}
+
+// rawStateTags reads `tags` directly from the resource's raw prior state, sidestepping
+// the ResourceDiff's merged reader. A fresh create has an entirely null raw state, and an
+// untagged resource has a null `tags` value; both read back as no tags.
+func rawStateTags(d *pluginsdk.ResourceDiff) map[string]interface{} {
+	rawState := d.GetRawState()
+	if rawState.IsNull() {
+		return map[string]interface{}{}
+	}
+
+	tagsVal := rawState.GetAttr("tags")
+	if tagsVal.IsNull() || !tagsVal.IsKnown() {
+		return map[string]interface{}{}
+	}
+
+	out := make(map[string]interface{}, tagsVal.LengthInt())
+	for k, v := range tagsVal.AsValueMap() {
+		out[k] = v.AsString()
+	}
+	return out
 }

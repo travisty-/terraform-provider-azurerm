@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/go-cty/cty"
 	ctymsgpack "github.com/hashicorp/go-cty/cty/msgpack"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov5"
+	"github.com/hashicorp/terraform-plugin-go/tftypes"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/clients"
 )
@@ -206,6 +207,26 @@ func testDefaultTagsProvider(defaultTags map[string]string) *schema.Provider {
 					Required: true,
 				},
 				"tags": commonschema.Tags(),
+			},
+		},
+	}
+	addDefaultTagsSupport(resources)
+	p := &schema.Provider{ResourcesMap: resources}
+	p.SetMeta(&clients.Client{DefaultTags: defaultTags})
+	return p
+}
+
+// testForceNewDefaultTagsProvider mirrors testDefaultTagsProvider but with a ForceNew
+// `tags` schema, matching resources such as azurerm_automation_runtime_environment.
+func testForceNewDefaultTagsProvider(defaultTags map[string]string) *schema.Provider {
+	resources := map[string]*schema.Resource{
+		"azurerm_default_tags_forcenew_test": {
+			Schema: map[string]*schema.Schema{
+				"name": {
+					Type:     schema.TypeString,
+					Required: true,
+				},
+				"tags": commonschema.TagsForceNew(),
 			},
 		},
 	}
@@ -409,13 +430,29 @@ func TestDefaultTags_planScenarios(t *testing.T) {
 		resp := planDefaultTagsResourceChange(t, noDefaults, "azurerm_default_tags_test",
 			cty.NullVal(ty), obj(nullID, unknownTags), obj(nullID, noTags))
 		result := decodeDynamicValue(t, resp.PlannedState, ty).GetAttr("tags")
-		// A Computed TypeMap with no prior state and an empty merged value cannot be forced
-		// to a known value from CustomizeDiff: schemaMap.diffMap in terraform-plugin-sdk
-		// always marks the count attribute computed when both the old and new lengths are
-		// zero and no prior state exists, regardless of what SetNew requests. The plan
-		// legitimately renders empty, null, or unknown here.
-		if !result.RawEquals(cty.MapValEmpty(cty.String)) && !result.IsNull() && result.IsKnown() {
-			t.Fatalf("expected empty, null, or unknown planned tags, got: %#v", result)
+		// A freshly-created resource has no prior state to compare the merged (here empty)
+		// tags against, so the diff can't be cleared to a known no-op the way an update can.
+		// SetUnknowns (grpc_provider.go) then unconditionally promotes the null Computed
+		// `tags` to unknown for any create plan; this is confined to create, since an
+		// update can always compare against its actual prior state.
+		if result.IsKnown() {
+			t.Fatalf("expected planned tags to be unknown, got: %#v", result)
+		}
+	})
+
+	t.Run("without defaults and null prior tags is a true no-op on update", func(t *testing.T) {
+		noDefaults := testDefaultTagsProvider(map[string]string{})
+		prior := obj(testID, noTags)
+		resp := planDefaultTagsResourceChange(t, noDefaults, "azurerm_default_tags_test",
+			prior, obj(testID, noTags), obj(testID, noTags))
+		for _, d := range resp.Diagnostics {
+			if d.Severity == tfprotov5.DiagnosticSeverityError {
+				t.Fatalf("unexpected error diagnostic: %s - %s", d.Summary, d.Detail)
+			}
+		}
+		planned := decodeDynamicValue(t, resp.PlannedState, ty)
+		if !planned.RawEquals(prior) {
+			t.Fatalf("expected the plan to be a no-op matching prior state, got: %#v", planned)
 		}
 	})
 
@@ -428,6 +465,56 @@ func TestDefaultTags_planScenarios(t *testing.T) {
 		expected := tags(map[string]string{"cost_center": "msft", "environment": "prod"})
 		if result := plannedTags(t, resp); !result.RawEquals(expected) {
 			t.Fatalf("unexpected planned tags: %#v", result)
+		}
+	})
+}
+
+func TestDefaultTags_forceNewPlanScenarios(t *testing.T) {
+	name := cty.StringVal("test")
+	noTags := cty.NullVal(cty.Map(cty.String))
+	testID := cty.StringVal("test-id")
+
+	t.Run("without defaults and null prior tags plans no replacement", func(t *testing.T) {
+		noDefaults := testForceNewDefaultTagsProvider(map[string]string{})
+		ty := noDefaults.ResourcesMap["azurerm_default_tags_forcenew_test"].CoreConfigSchema().ImpliedType()
+		obj := func(id, tagsVal cty.Value) cty.Value {
+			return testObjectWithOverrides(ty, map[string]cty.Value{"id": id, "name": name, "tags": tagsVal})
+		}
+		prior := obj(testID, noTags)
+		resp := planDefaultTagsResourceChange(t, noDefaults, "azurerm_default_tags_forcenew_test",
+			prior, obj(testID, noTags), obj(testID, noTags))
+		for _, d := range resp.Diagnostics {
+			if d.Severity == tfprotov5.DiagnosticSeverityError {
+				t.Fatalf("unexpected error diagnostic: %s - %s", d.Summary, d.Detail)
+			}
+		}
+		if len(resp.RequiresReplace) > 0 {
+			t.Fatalf("expected no forced replacement, got RequiresReplace: %v", resp.RequiresReplace)
+		}
+		planned := decodeDynamicValue(t, resp.PlannedState, ty)
+		if !planned.RawEquals(prior) {
+			t.Fatalf("expected the plan to be a no-op matching prior state, got: %#v", planned)
+		}
+	})
+
+	t.Run("newly configured defaults plan a replacement", func(t *testing.T) {
+		p := testForceNewDefaultTagsProvider(map[string]string{"environment": "prod"})
+		ty := p.ResourcesMap["azurerm_default_tags_forcenew_test"].CoreConfigSchema().ImpliedType()
+		obj := func(id, tagsVal cty.Value) cty.Value {
+			return testObjectWithOverrides(ty, map[string]cty.Value{"id": id, "name": name, "tags": tagsVal})
+		}
+		state := cty.MapVal(map[string]cty.Value{"cost_center": cty.StringVal("msft")})
+		resp := planDefaultTagsResourceChange(t, p, "azurerm_default_tags_forcenew_test",
+			obj(testID, state), obj(testID, state), obj(testID, state))
+		tagsPath := tftypes.NewAttributePath().WithAttributeName("tags")
+		found := false
+		for _, attr := range resp.RequiresReplace {
+			if attr.Equal(tagsPath) {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("expected RequiresReplace to include tags, got: %v", resp.RequiresReplace)
 		}
 	})
 }
