@@ -1,3 +1,9 @@
+## 5.2.0 (Unreleased)
+
+FEATURES:
+
+* provider: support for the `default_tags` block, which applies a default set of tags to all resources that support tags ([#13776](https://github.com/hashicorp/terraform-provider-azurerm/issues/13776))
+
 ## 5.1.0 (August 13, 2026)
 
 ENHANCEMENTS:

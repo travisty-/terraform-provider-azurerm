@@ -100,6 +100,8 @@ The following arguments are supported:
 
 * `features` - (Required) A `features` block as defined below which can be used to customize the behaviour of certain Azure Provider resources.
 
+* `default_tags` - (Optional) A `default_tags` block as defined below which is applied to all resources, created by the provider, that support tags.
+
 * `subscription_id` - (Optional) The Subscription ID which should be used. This can also be sourced from the `ARM_SUBSCRIPTION_ID` Environment Variable or the `az` CLI (the default subscription will be selected).
 
 -> **Note:** The `subscription_id` property is required when performing a plan or apply operation, but is not required to run `terraform validate`.
@@ -211,6 +213,18 @@ It's also possible to use multiple Provider blocks within a single Terraform con
 ## Features
 
 The `features` block allows configuring the behaviour of the Azure Provider, more information can be found on [the dedicated page for the `features` block](guides/features-block.html).
+
+## Default Tags
+
+The `default_tags` block supports the following:
+
+* `tags` - (Optional) A map of tags which is applied to every resource that supports tags. Tags defined on a resource take precedence over these defaults when the same key is defined in both places.
+
+-> **Note:** The `tags` attribute of each resource reflects the merged result of the provider `default_tags` and the resource's own `tags`, in both the plan and the state.
+
+-> **Note:** On create, if no `default_tags` are configured and the resource's `tags` argument is omitted or set to an empty map, the plan shows `tags` as `(known after apply)`; the applied value is an empty map. This does not occur on update, or when `default_tags` is configured.
+
+~> **Note:** A small number of resources cannot update tags in-place. Changing `default_tags` will force those resources to be recreated.
 
 ## Resource Provider Registrations
 
