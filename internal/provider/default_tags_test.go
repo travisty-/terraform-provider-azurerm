@@ -198,6 +198,53 @@ func TestValidateMergedTags(t *testing.T) {
 	}
 }
 
+func TestResourcesSupportDefaultTags(t *testing.T) {
+	provider := TestAzureProvider()
+
+	// resources whose top-level `tags` schema intentionally does not take part in
+	// provider `default_tags` - each entry documents why
+	exceptions := map[string]string{
+		// `tags` here is a list of free-form string labels, not the standard ARM
+		// key/value tags map
+		"azurerm_api_management_named_value":             "`tags` is a TypeList of strings, not the standard ARM tags map",
+		"azurerm_api_management_workspace_named_value":   "`tags` is a TypeList of strings, not the standard ARM tags map",
+		"azurerm_sentinel_threat_intelligence_indicator": "`tags` is a TypeList of strings (threat intelligence labels), not the standard ARM tags map",
+	}
+
+	for resourceName, resource := range provider.ResourcesMap {
+		t.Run(fmt.Sprintf("Resource/%s", resourceName), func(t *testing.T) {
+			tagsSchema, ok := resource.Schema["tags"]
+			if !ok {
+				return
+			}
+
+			if reason, exempt := exceptions[resourceName]; exempt {
+				t.Logf("[DEBUG] %q is exempt from default_tags: %s", resourceName, reason)
+				return
+			}
+
+			elem, elemOk := tagsSchema.Elem.(*schema.Schema)
+			if tagsSchema.Type != schema.TypeMap || !tagsSchema.Optional || !elemOk || elem.Type != schema.TypeString {
+				t.Fatalf("Resource %q has a non-standard `tags` schema which doesn't support provider `default_tags` - either fix the schema or add the resource to the exceptions list with an explanation", resourceName)
+			}
+			if !tagsSchema.Computed {
+				t.Fatalf("Resource %q has a standard `tags` schema which wasn't wired for `default_tags`", resourceName)
+			}
+			if resource.CustomizeDiff == nil {
+				t.Fatalf("Resource %q supports `default_tags` but has no CustomizeDiff", resourceName)
+			}
+		})
+	}
+}
+
+func TestFrameworkResourcesDoNotSupportDefaultTags(t *testing.T) {
+	for _, service := range SupportedFrameworkServices() {
+		if resources := service.FrameworkResources(); len(resources) > 0 {
+			t.Fatalf("the service %T registers Plugin Framework resources - provider `default_tags` only covers Plugin SDK resources (see addDefaultTagsSupport) and needs an equivalent mechanism before Framework resources are registered", service)
+		}
+	}
+}
+
 func testDefaultTagsProvider(defaultTags map[string]string) *schema.Provider {
 	resources := map[string]*schema.Resource{
 		"azurerm_default_tags_test": {

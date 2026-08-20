@@ -37,6 +37,7 @@ type ProviderModel struct {
 	DisableTerraformPartnerId      types.Bool   `tfsdk:"disable_terraform_partner_id"`
 	StorageUseAzureAD              types.Bool   `tfsdk:"storage_use_azuread"`
 	Features                       types.List   `tfsdk:"features"`
+	DefaultTags                    types.List   `tfsdk:"default_tags"`
 	ResourceProviderRegistrations  types.String `tfsdk:"resource_provider_registrations"`
 	ResourceProvidersToRegister    types.List   `tfsdk:"resource_providers_to_register"`
 }
@@ -95,6 +96,14 @@ var FeaturesAttributes = map[string]attr.Type{
 	"virtual_machine":            types.ListType{}.WithElementType(types.ObjectType{}.WithAttributeTypes(VirtualMachineAttributes)),
 	"virtual_machine_scale_set":  types.ListType{}.WithElementType(types.ObjectType{}.WithAttributeTypes(VirtualMachineScaleSetAttributes)),
 	"servicebus":                 types.ListType{}.WithElementType(types.ObjectType{}.WithAttributeTypes(ServiceBusAttributes)),
+}
+
+type DefaultTags struct {
+	Tags types.Map `tfsdk:"tags"`
+}
+
+var DefaultTagsAttributes = map[string]attr.Type{
+	"tags": types.MapType{}.WithElementType(types.StringType),
 }
 
 type APIManagement struct {

@@ -570,6 +570,25 @@ func (p *ProviderConfig) Load(ctx context.Context, data *ProviderModel, tfVersio
 		}
 	}
 
+	defaultTags := make(map[string]string)
+	if !data.DefaultTags.IsNull() && !data.DefaultTags.IsUnknown() {
+		var defaultTagsList []DefaultTags
+		d := data.DefaultTags.ElementsAs(ctx, &defaultTagsList, true)
+		diags.Append(d...)
+		if diags.HasError() {
+			return
+		}
+
+		if len(defaultTagsList) > 0 && !defaultTagsList[0].Tags.IsNull() && !defaultTagsList[0].Tags.IsUnknown() {
+			d := defaultTagsList[0].Tags.ElementsAs(ctx, &defaultTags, false)
+			diags.Append(d...)
+			if diags.HasError() {
+				return
+			}
+		}
+	}
+	p.clientBuilder.DefaultTags = defaultTags
+
 	p.clientBuilder.Features = f
 	p.clientBuilder.AuthConfig = authConfig
 	p.clientBuilder.CustomCorrelationRequestID = os.Getenv("ARM_CORRELATION_REQUEST_ID")

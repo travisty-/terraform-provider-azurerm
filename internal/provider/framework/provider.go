@@ -543,6 +543,20 @@ func (p *azureRmFrameworkProvider) Schema(_ context.Context, _ provider.SchemaRe
 					},
 				},
 			},
+			"default_tags": schema.ListNestedBlock{
+				Validators: []validator.List{
+					listvalidator.SizeAtMost(1),
+				},
+				NestedObject: schema.NestedBlockObject{
+					Attributes: map[string]schema.Attribute{
+						"tags": schema.MapAttribute{
+							ElementType: types.StringType,
+							Optional:    true,
+							Description: "A map of tags which is applied to every resource that supports tags.",
+						},
+					},
+				},
+			},
 		},
 	}
 }
