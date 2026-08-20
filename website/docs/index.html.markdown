@@ -100,7 +100,7 @@ The following arguments are supported:
 
 * `features` - (Required) A `features` block as defined below which can be used to customize the behaviour of certain Azure Provider resources.
 
-* `default_tags` - (Optional) A `default_tags` block as defined below which is applied to all resources, created by the provider, that support tags.
+* `default_tags` - (Optional) A `default_tags` block as defined below which is applied to all resources created by the provider that support tags.
 
 * `subscription_id` - (Optional) The Subscription ID which should be used. This can also be sourced from the `ARM_SUBSCRIPTION_ID` Environment Variable or the `az` CLI (the default subscription will be selected).
 
