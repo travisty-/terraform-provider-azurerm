@@ -41,6 +41,19 @@ func TestExpandDefaultTags(t *testing.T) {
 				"team":        "platform",
 			},
 		},
+		{
+			Name: "Non-String Tag Value",
+			Input: []interface{}{
+				map[string]interface{}{
+					"tags": map[string]interface{}{
+						"retry": 3,
+					},
+				},
+			},
+			Expected: map[string]string{
+				"retry": "3",
+			},
+		},
 	}
 
 	for _, testCase := range testData {

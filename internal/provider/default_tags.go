@@ -4,7 +4,8 @@
 package provider
 
 import (
-	"github.com/hashicorp/go-azure-helpers/resourcemanager/tags"
+	helperTags "github.com/hashicorp/go-azure-helpers/resourcemanager/tags"
+	"github.com/hashicorp/terraform-provider-azurerm/internal/tags"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/tf/pluginsdk"
 )
 
@@ -18,7 +19,7 @@ func schemaDefaultTags() *pluginsdk.Schema {
 				"tags": {
 					Type:         pluginsdk.TypeMap,
 					Optional:     true,
-					ValidateFunc: tags.Validate,
+					ValidateFunc: helperTags.Validate,
 					Elem: &pluginsdk.Schema{
 						Type: pluginsdk.TypeString,
 					},
@@ -40,7 +41,9 @@ func expandDefaultTags(input []interface{}) map[string]string {
 
 	if raw, ok := val["tags"].(map[string]interface{}); ok {
 		for k, v := range raw {
-			output[k] = v.(string)
+			// Validate should have ignored this error already
+			value, _ := tags.TagValueToString(v)
+			output[k] = value
 		}
 	}
 
