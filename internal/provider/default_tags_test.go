@@ -418,6 +418,62 @@ func TestDefaultTags_planScenarios(t *testing.T) {
 		}
 	})
 
+	t.Run("a known map with an unknown element value defers the merge to apply time on create", func(t *testing.T) {
+		partiallyUnknown := cty.MapVal(map[string]cty.Value{
+			"cost_center": cty.StringVal("msft"),
+			"ref":         cty.UnknownVal(cty.String),
+		})
+		resp := planDefaultTagsResourceChange(t, p, "azurerm_default_tags_test",
+			cty.NullVal(ty), obj(nullID, partiallyUnknown), obj(nullID, partiallyUnknown))
+		result := decodeDynamicValue(t, resp.PlannedState, ty).GetAttr("tags")
+		if result.IsWhollyKnown() {
+			t.Fatalf("expected planned tags to remain unknown, got: %#v", result)
+		}
+	})
+
+	t.Run("a known map with an unknown element value defers the merge to apply time on create without defaults", func(t *testing.T) {
+		noDefaults := testDefaultTagsProvider(map[string]string{})
+		partiallyUnknown := cty.MapVal(map[string]cty.Value{
+			"cost_center": cty.StringVal("msft"),
+			"ref":         cty.UnknownVal(cty.String),
+		})
+		resp := planDefaultTagsResourceChange(t, noDefaults, "azurerm_default_tags_test",
+			cty.NullVal(ty), obj(nullID, partiallyUnknown), obj(nullID, partiallyUnknown))
+		result := decodeDynamicValue(t, resp.PlannedState, ty).GetAttr("tags")
+		if result.IsWhollyKnown() {
+			t.Fatalf("expected planned tags to remain unknown, got: %#v", result)
+		}
+	})
+
+	t.Run("a known map with an unknown element value defers the merge to apply time on update", func(t *testing.T) {
+		priorTags := tags(map[string]string{"cost_center": "msft", "environment": "prod", "team": "platform"})
+		partiallyUnknown := cty.MapVal(map[string]cty.Value{
+			"cost_center": cty.StringVal("msft"),
+			"ref":         cty.UnknownVal(cty.String),
+		})
+		resp := planDefaultTagsResourceChange(t, p, "azurerm_default_tags_test",
+			obj(testID, priorTags), obj(testID, partiallyUnknown), obj(testID, partiallyUnknown))
+		result := decodeDynamicValue(t, resp.PlannedState, ty).GetAttr("tags")
+		if result.IsWhollyKnown() {
+			t.Fatalf("expected planned tags to remain unknown, got: %#v", result)
+		}
+	})
+
+	t.Run("a known map with an unknown element value defers the merge to apply time on update without defaults", func(t *testing.T) {
+		noDefaults := testDefaultTagsProvider(map[string]string{})
+		priorTags := tags(map[string]string{"cost_center": "msft"})
+		partiallyUnknown := cty.MapVal(map[string]cty.Value{
+			"cost_center": cty.StringVal("msft"),
+			"ref":         cty.UnknownVal(cty.String),
+		})
+		resp := planDefaultTagsResourceChange(t, noDefaults, "azurerm_default_tags_test",
+			obj(testID, priorTags), obj(testID, partiallyUnknown), obj(testID, partiallyUnknown))
+		result := decodeDynamicValue(t, resp.PlannedState, ty).GetAttr("tags")
+		if result.IsWhollyKnown() {
+			t.Fatalf("expected planned tags to remain unknown, got: %#v", result)
+		}
+	})
+
 	t.Run("ignore_changes keeps resource-level edits frozen", func(t *testing.T) {
 		// core substitutes the prior state into the proposed value for ignored attributes,
 		// so config and proposed disagree; the proposed value must win as the merge base

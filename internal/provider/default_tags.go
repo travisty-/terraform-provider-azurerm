@@ -136,7 +136,12 @@ func defaultTagsCustomizeDiff(ctx context.Context, d *pluginsdk.ResourceDiff, me
 	base := make(map[string]interface{})
 	// NewValueKnown is unreliable for TypeMap: an unresolved computed map reads back
 	// as known-and-empty rather than unknown. The raw planned value distinguishes them.
-	plannedIsKnown := d.GetRawPlan().GetAttr("tags").IsKnown()
+	// A map can itself be known while one of its element values is unknown (for example
+	// a tag value that references another resource's not-yet-known attribute); d.Get
+	// reads such a map back as an empty, fully-resolved base, discarding both the known
+	// and unknown elements, so the check here is for the map being wholly known rather
+	// than merely known.
+	plannedIsKnown := d.GetRawPlan().GetAttr("tags").IsWhollyKnown()
 	if !rawConfig.GetAttr("tags").IsNull() {
 		if !plannedIsKnown {
 			// the resource's tags contain values unknown until apply time - the merge
