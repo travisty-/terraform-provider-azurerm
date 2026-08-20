@@ -28,6 +28,16 @@ func TestAccResourceGroup_defaultTags(t *testing.T) {
 			),
 		},
 		{
+			// changing the provider's default_tags value updates the merged tag in place
+			Config: r.defaultTagsChanged(data),
+			Check: acceptance.ComposeTestCheckFunc(
+				check.That(data.ResourceName).ExistsInAzure(r),
+				check.That(data.ResourceName).Key("tags.environment").HasValue("staging"),
+				check.That(data.ResourceName).Key("tags.team").HasValue("platform"),
+				check.That(data.ResourceName).Key("tags.cost_center").HasValue("msft"),
+			),
+		},
+		{
 			// a resource-level tag overrides the default with the same key
 			Config: r.defaultTagsOverride(data),
 			Check: acceptance.ComposeTestCheckFunc(
@@ -43,6 +53,27 @@ func TestAccResourceGroup_defaultTags(t *testing.T) {
 				check.That(data.ResourceName).ExistsInAzure(r),
 				check.That(data.ResourceName).Key("tags.%").HasValue("1"),
 				check.That(data.ResourceName).Key("tags.cost_center").HasValue("msft"),
+			),
+		},
+		{
+			// establishes a resource whose tags are frozen by ignore_changes, with defaults merged in
+			Config: r.defaultTagsIgnoreChanges(data),
+			Check: acceptance.ComposeTestCheckFunc(
+				check.That(data.ResourceName).ExistsInAzure(r),
+				check.That(data.ResourceName).Key("tags.%").HasValue("3"),
+				check.That(data.ResourceName).Key("tags.cost_center").HasValue("msft"),
+				check.That(data.ResourceName).Key("tags.environment").HasValue("prod"),
+				check.That(data.ResourceName).Key("tags.team").HasValue("platform"),
+			),
+		},
+		{
+			// a resource-level tag edit stays frozen by ignore_changes while the provider defaults still apply
+			Config: r.defaultTagsIgnoreChangesEdited(data),
+			Check: acceptance.ComposeTestCheckFunc(
+				check.That(data.ResourceName).ExistsInAzure(r),
+				check.That(data.ResourceName).Key("tags.cost_center").HasValue("msft"),
+				check.That(data.ResourceName).Key("tags.environment").HasValue("prod"),
+				check.That(data.ResourceName).Key("tags.team").HasValue("platform"),
 			),
 		},
 	})
@@ -109,6 +140,86 @@ resource "azurerm_resource_group" "test" {
 
   tags = {
     cost_center = "msft"
+  }
+}
+`, data.RandomInteger, data.Locations.Primary)
+}
+
+func (r ResourceGroupResource) defaultTagsChanged(data acceptance.TestData) string {
+	return fmt.Sprintf(`
+provider "azurerm" {
+  features {}
+
+  default_tags {
+    tags = {
+      environment = "staging"
+      team        = "platform"
+    }
+  }
+}
+
+resource "azurerm_resource_group" "test" {
+  name     = "acctestRG-%d"
+  location = "%s"
+
+  tags = {
+    cost_center = "msft"
+  }
+}
+`, data.RandomInteger, data.Locations.Primary)
+}
+
+func (r ResourceGroupResource) defaultTagsIgnoreChanges(data acceptance.TestData) string {
+	return fmt.Sprintf(`
+provider "azurerm" {
+  features {}
+
+  default_tags {
+    tags = {
+      environment = "prod"
+      team        = "platform"
+    }
+  }
+}
+
+resource "azurerm_resource_group" "test" {
+  name     = "acctestRG-%d"
+  location = "%s"
+
+  tags = {
+    cost_center = "msft"
+  }
+
+  lifecycle {
+    ignore_changes = [tags]
+  }
+}
+`, data.RandomInteger, data.Locations.Primary)
+}
+
+func (r ResourceGroupResource) defaultTagsIgnoreChangesEdited(data acceptance.TestData) string {
+	return fmt.Sprintf(`
+provider "azurerm" {
+  features {}
+
+  default_tags {
+    tags = {
+      environment = "prod"
+      team        = "platform"
+    }
+  }
+}
+
+resource "azurerm_resource_group" "test" {
+  name     = "acctestRG-%d"
+  location = "%s"
+
+  tags = {
+    cost_center = "changed"
+  }
+
+  lifecycle {
+    ignore_changes = [tags]
   }
 }
 `, data.RandomInteger, data.Locations.Primary)
