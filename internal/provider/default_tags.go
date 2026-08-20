@@ -4,10 +4,13 @@
 package provider
 
 import (
+	"context"
 	"fmt"
+	"reflect"
 
 	helperTags "github.com/hashicorp/go-azure-helpers/resourcemanager/tags"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-provider-azurerm/internal/clients"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/tags"
 	"github.com/hashicorp/terraform-provider-azurerm/internal/tf/pluginsdk"
 )
@@ -92,4 +95,70 @@ func validateMergedTags(mergedTags map[string]interface{}, resourceTagCount int,
 	}
 
 	return nil
+}
+
+// addDefaultTagsSupport wires provider-level default tags into every Resource with the
+// standard ARM tags schema. The `tags` schema becomes Computed so its planned value can
+// legitimately include the provider `default_tags`, and a CustomizeDiff merges them into
+// the plan; resource-level tags take precedence. Resources read the merged value via
+// d.Get("tags") during Create/Update, so no per-resource changes are needed.
+func addDefaultTagsSupport(resources map[string]*schema.Resource) {
+	for _, resource := range resources {
+		if !resourceSupportsDefaultTags(resource) {
+			continue
+		}
+
+		resource.Schema["tags"].Computed = true
+
+		if existing := resource.CustomizeDiff; existing != nil {
+			resource.CustomizeDiff = pluginsdk.CustomDiffInSequence(existing, defaultTagsCustomizeDiff)
+		} else {
+			resource.CustomizeDiff = defaultTagsCustomizeDiff
+		}
+	}
+}
+
+func defaultTagsCustomizeDiff(ctx context.Context, d *pluginsdk.ResourceDiff, meta interface{}) error {
+	client, ok := meta.(*clients.Client)
+	if !ok || client == nil {
+		return nil
+	}
+
+	rawConfig := d.GetRawConfig()
+	if rawConfig.IsNull() || !rawConfig.Type().HasAttribute("tags") {
+		return nil
+	}
+
+	// The raw config distinguishes `tags` being unset from being set. When set, the
+	// proposed value is the base for the merge: under `ignore_changes` core proposes the
+	// prior state rather than the config, and either way the proposed value holds the
+	// resource-level tags, which take precedence over the provider `default_tags`.
+	base := make(map[string]interface{})
+	// NewValueKnown is unreliable for TypeMap: an unresolved computed map reads back
+	// as known-and-empty rather than unknown. The raw planned value distinguishes them.
+	plannedIsKnown := d.GetRawPlan().GetAttr("tags").IsKnown()
+	if !rawConfig.GetAttr("tags").IsNull() {
+		if !plannedIsKnown {
+			// the resource's tags contain values unknown until apply time - the merge
+			// happens when this runs again during the apply step
+			return nil
+		}
+		if planned, ok := d.Get("tags").(map[string]interface{}); ok {
+			base = planned
+		}
+	}
+
+	merged := mergeDefaultTags(client.DefaultTags, base)
+
+	if len(client.DefaultTags) > 0 {
+		if err := validateMergedTags(merged, len(base), len(client.DefaultTags)); err != nil {
+			return err
+		}
+	}
+
+	if plannedIsKnown && reflect.DeepEqual(d.Get("tags"), merged) {
+		return nil
+	}
+
+	return d.SetNew("tags", merged)
 }
