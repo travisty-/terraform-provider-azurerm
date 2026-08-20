@@ -27,6 +27,7 @@ type ClientBuilder struct {
 	Features   features.UserFeatures
 
 	CustomCorrelationRequestID  string
+	DefaultTags                 map[string]string
 	DisableCorrelationRequestID bool
 	DisableTerraformPartnerID   bool
 	MetadataHost                string
@@ -132,6 +133,7 @@ func Build(ctx context.Context, builder ClientBuilder) (*Client, error) {
 		},
 
 		AuthConfig:  builder.AuthConfig,
+		DefaultTags: builder.DefaultTags,
 		Environment: builder.AuthConfig.Environment,
 		Features:    builder.Features,
 

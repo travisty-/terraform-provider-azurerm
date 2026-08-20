@@ -37,6 +37,7 @@ type ClientOptions struct {
 	AuthConfig  *auth.Credentials
 	Environment environments.Environment
 	Features    features.UserFeatures
+	DefaultTags map[string]string
 
 	SubscriptionId   string
 	TenantId         string

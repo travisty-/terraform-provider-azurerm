@@ -341,6 +341,8 @@ func azureProvider(supportLegacyTestSuite bool, testName string) *schema.Provide
 
 			"features": schemaFeatures(supportLegacyTestSuite),
 
+			"default_tags": schemaDefaultTags(),
+
 			// Advanced feature flags
 			"resource_provider_registrations": {
 				Type:        schema.TypeString,
@@ -512,6 +514,7 @@ func buildClient(ctx context.Context, p *schema.Provider, d *schema.ResourceData
 	requiredResourceProviders.Merge(additionalProvidersToRegister)
 
 	features := expandFeatures(d.Get("features").([]interface{}))
+	defaultTags := expandDefaultTags(d.Get("default_tags").([]interface{}))
 
 	if os.Getenv("ARM_PROVIDER_ENHANCED_VALIDATION") != "" {
 		return nil, diag.Errorf("the environment variable `ARM_PROVIDER_ENHANCED_VALIDATION` has been removed in v5.0 of the AzureRM Provider - please use the `enhanced_validation` block inside the `features` block or the replacement environment variables `ARM_PROVIDER_ENHANCED_VALIDATION_LOCATIONS` and `ARM_PROVIDER_ENHANCED_VALIDATION_RESOURCE_PROVIDERS` instead")
@@ -519,6 +522,7 @@ func buildClient(ctx context.Context, p *schema.Provider, d *schema.ResourceData
 
 	clientBuilder := clients.ClientBuilder{
 		AuthConfig:                  authConfig,
+		DefaultTags:                 defaultTags,
 		DisableCorrelationRequestID: d.Get("disable_correlation_request_id").(bool),
 		DisableTerraformPartnerID:   d.Get("disable_terraform_partner_id").(bool),
 		Features:                    features,

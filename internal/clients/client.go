@@ -155,8 +155,9 @@ type Client struct {
 	// StopContext is used for propagating control from Terraform Core (e.g. Ctrl/Cmd+C)
 	StopContext context.Context
 
-	Account  *ResourceManagerAccount
-	Features features.UserFeatures
+	Account     *ResourceManagerAccount
+	Features    features.UserFeatures
+	DefaultTags map[string]string
 
 	Preflight *preflight.Client
 
@@ -297,6 +298,7 @@ func (client *Client) Build(ctx context.Context, o *common.ClientOptions) error 
 	}
 
 	client.Features = o.Features
+	client.DefaultTags = o.DefaultTags
 	client.StopContext = ctx
 
 	var err error
